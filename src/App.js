@@ -10,7 +10,7 @@ var VideoGrant = AccessToken.VideoGrant;
 // const auth_token = 'd2d0f6c12d835198cc2bcfe86c762a26'
 
 const ROOM = 'test-room';
-var TOKEN = '';
+var videoStream;
 
 class App extends React.Component {
   constructor() {
@@ -24,18 +24,13 @@ class App extends React.Component {
   }
 
   async connect() {
-    TOKEN = this.getTokenUnsafe(this.state.uid)
-    console.info('token', TOKEN)
+    let token = this.getTokenUnsafe(this.state.uid, 'camera')
     document.title = this.state.uid
 
-    connect(TOKEN, { name: ROOM }).then(room => {
+    videoStream = connect(token, { name: ROOM }).then(room => {
       console.log('Connected to Room "%s"', room.name);
 
-      createLocalVideoTrack().then(track => {
-        const localMediaContainer = document.getElementById('local-media');
-        localMediaContainer.innerHTML = '';
-        localMediaContainer.appendChild(track.attach())
-      });
+      // createLocalVideoTrack().then(track => this.showStream.bind(this, track));
 
       room.participants.forEach(this.participantConnected.bind(this));
       room.on('participantConnected', this.participantConnected.bind(this));
@@ -45,15 +40,23 @@ class App extends React.Component {
     });
   }
 
+  async showStream(track) {
+    const localMediaContainer = document.getElementById('local-media');
+    localMediaContainer.innerHTML = '<div style="background-color: silver">' + track.identity + '<div>';
+    localMediaContainer.appendChild(track.attach())
+  }
+
   async shareScreen() {
+    let token = this.getTokenUnsafe(this.state.uid, 'screen')
+
     const stream = await navigator.mediaDevices.getDisplayMedia();
     const screenTrack = new LocalVideoTrack(stream.getTracks()[0]);
 
-    const room = await connect(TOKEN, {
+    const room = await connect(token, {
       name: ROOM,
       tracks: [screenTrack]
     });
-    screenTrack.once('stopped', this.connect.bind(this));
+    screenTrack.once('stopped', this.showStream.bind(this, videoStream.track));
   }
 
   participantConnected(participant) {
@@ -90,7 +93,7 @@ class App extends React.Component {
     track.detach().forEach(element => element.remove());
   }
 
-  getTokenUnsafe(uid) {
+  getTokenUnsafe(uid, type = 'camera') {
     // API key used at backend
     // @see: https://www.twilio.com/console/video/project/testing-tools
     const ACCOUNT_SID = 'AC30cfab9b06bcf832475a26c5d087807b';
@@ -104,7 +107,7 @@ class App extends React.Component {
     );
 
     // Set the Identity of this token
-    accessToken.identity = uid;
+    accessToken.identity = String(uid) + '-' + type;
 
     // Grant access to Video
     var grant = new VideoGrant();
@@ -119,8 +122,8 @@ class App extends React.Component {
   render() {
     return (
       <div className="App">
-        <button onClick={() => this.setState({uid: uuidv4()})}>New Uid</button>
-        <input style={{width: "250px" }} value={this.state.uid} onChange={(e) => this.setState({uid: e.target.value})}></input>
+        <button onClick={() => this.setState({ uid: uuidv4() })}>New Uid</button>
+        <input style={{ width: "250px" }} value={this.state.uid} onChange={(e) => this.setState({ uid: e.target.value })}></input>
         <button onClick={this.connect.bind(this)}>Connect</button>
         <button onClick={this.shareScreen.bind(this)}>Share Screen</button>
         <div id='local-media'></div>
